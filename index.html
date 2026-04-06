@@ -22,6 +22,11 @@
         </header>
 
         <main>
+            <!-- Loading State -->
+            <div id="loadingState" class="loading-state">
+                <p>Loading your data...</p>
+            </div>
+
             <!-- Backup Reminder -->
             <div id="backupReminder" class="backup-reminder hidden">
                 <span>It's been a while since your last backup.</span>
@@ -31,7 +36,6 @@
 
             <!-- Task List -->
             <section id="taskList" class="task-list">
-                <!-- Tasks will be rendered here by JavaScript -->
             </section>
 
             <!-- Trash Truck Prediction Section -->
@@ -50,13 +54,9 @@
         </main>
 
         <footer class="dashboard-footer">
-            <a href="file:///Users/michael/home-dashboard/">Open Project Folder</a>
+            <a href="#" id="exportDataBtn">Export Backup</a>
             <span class="footer-divider">|</span>
-            <a href="file:///Users/michael/home-dashboard/README.md">View README</a>
-            <span class="footer-divider">|</span>
-            <a href="#" id="exportDataBtn">Export Data</a>
-            <span class="footer-divider">|</span>
-            <a href="#" id="importDataBtn">Import Data</a>
+            <a href="#" id="importDataBtn">Import Backup</a>
             <input type="file" id="importFileInput" accept=".json" style="display: none;">
         </footer>
 
@@ -185,6 +185,7 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Firebase SDK -->
+    <script type="module" src="app.js"></script>
 </body>
 </html>

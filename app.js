@@ -1,36 +1,75 @@
-// Home Maintenance Dashboard - Main Application
+// Home Maintenance Dashboard - Firebase Edition
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ============================================
-// Data Storage Functions
+// Firebase Configuration
 // ============================================
 
-function getTasks() {
-    const tasks = localStorage.getItem('homeDashboardTasks');
-    return tasks ? JSON.parse(tasks) : [];
+const firebaseConfig = {
+    apiKey: "AIzaSyA_e-s-GJoFlLNzZALrT8yYNVjoxDinuLk",
+    authDomain: "home-dashboard-6471e.firebaseapp.com",
+    projectId: "home-dashboard-6471e",
+    storageBucket: "home-dashboard-6471e.firebasestorage.app",
+    messagingSenderId: "984823429724",
+    appId: "1:984823429724:web:d8f434fd26e816b863c499",
+    measurementId: "G-LCDBRNE4W9"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+
+// In-memory cache (avoids redundant reads)
+let _tasks = null;
+let _trashTimes = null;
+
+// ============================================
+// Data Storage Functions (Firestore)
+// ============================================
+
+async function getTasks() {
+    if (_tasks !== null) return _tasks;
+    try {
+        const snap = await getDoc(doc(db, "dashboard", "tasks"));
+        _tasks = snap.exists() ? (snap.data().list || []) : [];
+    } catch (e) {
+        console.error("Error loading tasks:", e);
+        _tasks = [];
+    }
+    return _tasks;
 }
 
-function saveTasks(tasks) {
-    localStorage.setItem('homeDashboardTasks', JSON.stringify(tasks));
+async function saveTasks(tasks) {
+    _tasks = tasks;
+    await setDoc(doc(db, "dashboard", "tasks"), { list: tasks });
 }
 
-function getTrashTimes() {
-    const times = localStorage.getItem('homeDashboardTrashTimes');
-    return times ? JSON.parse(times) : [];
+async function getTrashTimes() {
+    if (_trashTimes !== null) return _trashTimes;
+    try {
+        const snap = await getDoc(doc(db, "dashboard", "trashTimes"));
+        _trashTimes = snap.exists() ? (snap.data().list || []) : [];
+    } catch (e) {
+        console.error("Error loading trash times:", e);
+        _trashTimes = [];
+    }
+    return _trashTimes;
 }
 
-function saveTrashTimes(times) {
-    localStorage.setItem('homeDashboardTrashTimes', JSON.stringify(times));
+async function saveTrashTimes(times) {
+    _trashTimes = times;
+    await setDoc(doc(db, "dashboard", "trashTimes"), { list: times });
 }
 
 function exportData() {
     const now = new Date();
     const data = {
-        tasks: getTasks(),
-        trashTimes: getTrashTimes(),
+        tasks: _tasks || [],
+        trashTimes: _trashTimes || [],
         exportDate: now.toISOString()
     };
 
-    // Format: dashboard-data-2024-01-15-14-30.json
     const dateStr = now.toISOString().slice(0, 16).replace('T', '-').replace(':', '-');
     const filename = `dashboard-data-${dateStr}.json`;
 
@@ -45,7 +84,6 @@ function exportData() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    // Save last export date
     localStorage.setItem('homeDashboardLastExport', now.toISOString());
     hideBackupReminder();
 }
@@ -55,17 +93,13 @@ function checkBackupReminder() {
     const reminder = document.getElementById('backupReminder');
 
     if (!lastExport) {
-        // Never exported - show reminder if there's data
-        if (getTasks().length > 0 || getTrashTimes().length > 0) {
+        if ((_tasks || []).length > 0 || (_trashTimes || []).length > 0) {
             reminder.classList.remove('hidden');
         }
         return;
     }
 
-    const lastExportDate = new Date(lastExport);
-    const now = new Date();
-    const daysSinceExport = Math.floor((now - lastExportDate) / (1000 * 60 * 60 * 24));
-
+    const daysSinceExport = Math.floor((new Date() - new Date(lastExport)) / (1000 * 60 * 60 * 24));
     if (daysSinceExport >= 7) {
         reminder.classList.remove('hidden');
     }
@@ -75,29 +109,26 @@ function hideBackupReminder() {
     document.getElementById('backupReminder').classList.add('hidden');
 }
 
-function importData(file) {
+async function importData(file) {
     const reader = new FileReader();
-
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
-
             if (data.tasks) {
-                saveTasks(data.tasks);
+                _tasks = data.tasks;
+                await saveTasks(data.tasks);
             }
             if (data.trashTimes) {
-                saveTrashTimes(data.trashTimes);
+                _trashTimes = data.trashTimes;
+                await saveTrashTimes(data.trashTimes);
             }
-
-            renderTasks();
-            renderTrashPrediction();
-
+            await renderTasks();
+            await renderTrashPrediction();
             alert('Data imported successfully!');
         } catch (err) {
             alert('Error importing data. Please check the file format.');
         }
     };
-
     reader.readAsText(file);
 }
 
@@ -111,104 +142,76 @@ function generateId() {
 
 function convertToDays(value, unit) {
     switch (unit) {
-        case 'weeks':
-            return value * 7;
-        case 'months':
-            return value * 30;
-        default:
-            return value;
+        case 'weeks': return value * 7;
+        case 'months': return value * 30;
+        default: return value;
     }
 }
 
-// Calculate average interval from completion history
 function calculatePredictedInterval(completionHistory) {
-    if (!completionHistory || completionHistory.length < 2) {
-        return null;
-    }
-
-    // Sort by date
+    if (!completionHistory || completionHistory.length < 2) return null;
     const sorted = [...completionHistory].sort((a, b) => new Date(a) - new Date(b));
-
-    // Calculate intervals between completions
     let totalDays = 0;
     for (let i = 1; i < sorted.length; i++) {
-        const prev = new Date(sorted[i - 1]);
-        const curr = new Date(sorted[i]);
-        const diffDays = Math.round((curr - prev) / (1000 * 60 * 60 * 24));
+        const diffDays = Math.round((new Date(sorted[i]) - new Date(sorted[i - 1])) / (1000 * 60 * 60 * 24));
         totalDays += diffDays;
     }
-
     return Math.round(totalDays / (sorted.length - 1));
 }
 
-// Get effective lifespan for a task (fixed or predicted)
 function getEffectiveLifespan(task) {
     if (task.scheduleType === 'predicted') {
         const predicted = calculatePredictedInterval(task.completionHistory);
-        if (predicted) {
-            return predicted;
-        }
-        // Fall back to expected interval if not enough data
+        if (predicted) return predicted;
         return convertToDays(task.expectedInterval || 7, task.expectedIntervalUnit || 'days');
     }
     return convertToDays(task.lifespanValue, task.lifespanUnit);
 }
 
-// Get last completion date for a task
 function getLastCompletion(task) {
     if (task.scheduleType === 'predicted' && task.completionHistory && task.completionHistory.length > 0) {
-        const sorted = [...task.completionHistory].sort((a, b) => new Date(b) - new Date(a));
-        return sorted[0];
+        return [...task.completionHistory].sort((a, b) => new Date(b) - new Date(a))[0];
     }
     return task.lastServiced;
 }
 
 function calculateDaysRemaining(lastServiced, lifespanDays) {
-    const lastDate = new Date(lastServiced);
-    const dueDate = new Date(lastDate);
+    const dueDate = new Date(lastServiced);
     dueDate.setDate(dueDate.getDate() + lifespanDays);
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     dueDate.setHours(0, 0, 0, 0);
-
-    const diffTime = dueDate - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    return diffDays;
+    return Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
 }
 
 function getStatus(daysRemaining, lifespanDays) {
-    if (daysRemaining < 0) {
-        return 'red';
-    }
+    if (daysRemaining < 0) return 'red';
     const percentRemaining = (daysRemaining / lifespanDays) * 100;
-    if (percentRemaining <= 25) {
-        return 'yellow';
-    }
-    return 'green';
+    return percentRemaining <= 25 ? 'yellow' : 'green';
 }
 
 function formatDaysRemaining(days) {
     if (days < 0) {
         const overdue = Math.abs(days);
         return `OVERDUE by ${overdue} day${overdue !== 1 ? 's' : ''}`;
-    } else if (days === 0) {
-        return 'Due today';
-    } else if (days === 1) {
-        return 'Tomorrow';
-    } else {
-        return `${days} days remaining`;
-    }
+    } else if (days === 0) return 'Due today';
+    else if (days === 1) return 'Tomorrow';
+    else return `${days} days remaining`;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // ============================================
 // Task Rendering
 // ============================================
 
-function renderTasks() {
+async function renderTasks() {
     const taskList = document.getElementById('taskList');
-    const tasks = getTasks();
+    const tasks = await getTasks();
 
     if (tasks.length === 0) {
         taskList.innerHTML = `
@@ -220,7 +223,6 @@ function renderTasks() {
         return;
     }
 
-    // Sort tasks by urgency (most urgent first)
     const sortedTasks = tasks.map(task => {
         const lifespanDays = getEffectiveLifespan(task);
         const lastCompletion = getLastCompletion(task);
@@ -234,24 +236,17 @@ function renderTasks() {
         const alertIcon = status === 'yellow' ? '<span class="alert-icon">&#9888;</span>' :
                          status === 'red' ? '<span class="alert-icon">!</span>' : '';
 
-        // Calculate percentage remaining for timeline bar
         const percentRemaining = Math.max(0, Math.min(100, (task.daysRemaining / task.lifespanDays) * 100));
-
-        // Different button for predicted vs fixed tasks
         const isPredicted = task.scheduleType === 'predicted';
         const actionButton = isPredicted
-            ? `<button class="btn btn-done btn-small" onclick="recordTaskCompletion('${task.id}')">Record</button>`
-            : `<button class="btn btn-done btn-small" onclick="markTaskDone('${task.id}')">Done</button>`;
+            ? `<button class="btn btn-done btn-small" onclick="window.recordTaskCompletion('${task.id}')">Record</button>`
+            : `<button class="btn btn-done btn-small" onclick="window.markTaskDone('${task.id}')">Done</button>`;
 
-        // Show prediction info for predicted tasks
         const predictionInfo = isPredicted && task.completionHistory && task.completionHistory.length >= 2
-            ? `<span class="prediction-badge">~${task.lifespanDays}d avg</span>`
-            : '';
+            ? `<span class="prediction-badge">~${task.lifespanDays}d avg</span>` : '';
 
-        // Add asterisk for predicted tasks
         const taskNameDisplay = isPredicted ? `${escapeHtml(task.name)} *` : escapeHtml(task.name);
 
-        // Generate day tick marks (limit to 30 for readability)
         const tickCount = Math.min(task.lifespanDays, 30);
         const tickMarks = tickCount > 1 ? Array.from({length: tickCount - 1}, (_, i) =>
             `<div class="timeline-tick" style="left: ${((i + 1) / tickCount) * 100}%"></div>`
@@ -273,82 +268,62 @@ function renderTasks() {
                 </div>
                 <div class="task-actions">
                     ${actionButton}
-                    <button class="btn btn-edit btn-small" onclick="editTask('${task.id}')">Edit</button>
-                    <button class="btn btn-delete btn-small" onclick="confirmDeleteTask('${task.id}')">Delete</button>
+                    <button class="btn btn-edit btn-small" onclick="window.editTask('${task.id}')">Edit</button>
+                    <button class="btn btn-delete btn-small" onclick="window.confirmDeleteTask('${task.id}')">Delete</button>
                 </div>
             </div>
         `;
     }).join('');
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 // ============================================
 // Task CRUD Operations
 // ============================================
 
-function addTask(taskData) {
-    const tasks = getTasks();
-    const newTask = {
-        id: generateId(),
-        ...taskData,
-        createdAt: new Date().toISOString()
-    };
-    tasks.push(newTask);
-    saveTasks(tasks);
-    renderTasks();
+async function addTask(taskData) {
+    const tasks = await getTasks();
+    tasks.push({ id: generateId(), ...taskData, createdAt: new Date().toISOString() });
+    await saveTasks(tasks);
+    await renderTasks();
 }
 
-function updateTask(taskId, taskData) {
-    const tasks = getTasks();
+async function updateTask(taskId, taskData) {
+    const tasks = await getTasks();
     const index = tasks.findIndex(t => t.id === taskId);
     if (index !== -1) {
         tasks[index] = { ...tasks[index], ...taskData };
-        saveTasks(tasks);
-        renderTasks();
+        await saveTasks(tasks);
+        await renderTasks();
     }
 }
 
-function deleteTask(taskId) {
-    const tasks = getTasks();
-    const filtered = tasks.filter(t => t.id !== taskId);
-    saveTasks(filtered);
-    renderTasks();
+async function deleteTask(taskId) {
+    const tasks = await getTasks();
+    await saveTasks(tasks.filter(t => t.id !== taskId));
+    await renderTasks();
 }
 
-function markTaskDone(taskId) {
+window.markTaskDone = async function(taskId) {
     const today = new Date().toISOString().split('T')[0];
-    updateTask(taskId, { lastServiced: today });
-}
+    await updateTask(taskId, { lastServiced: today });
+};
 
-function recordTaskCompletion(taskId) {
-    const tasks = getTasks();
+window.recordTaskCompletion = async function(taskId) {
+    const tasks = await getTasks();
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
     const now = new Date();
-    const timeStr = formatTime(now.getHours(), now.getMinutes());
-    const dateStr = now.toISOString().split('T')[0];
-
-    showConfirm(`Record ${task.name} completed at ${timeStr}?`, () => {
+    showConfirm(`Record ${task.name} completed at ${formatTime(now.getHours(), now.getMinutes())}?`, async () => {
         const completionHistory = task.completionHistory || [];
         completionHistory.push(now.toISOString());
-
-        // Keep only last 20 completions
-        if (completionHistory.length > 20) {
-            completionHistory.shift();
-        }
-
-        updateTask(taskId, { completionHistory });
+        if (completionHistory.length > 20) completionHistory.shift();
+        await updateTask(taskId, { completionHistory });
     }, 'Record');
-}
+};
 
-function editTask(taskId) {
-    const tasks = getTasks();
+window.editTask = async function(taskId) {
+    const tasks = await getTasks();
     const task = tasks.find(t => t.id === taskId);
     if (task) {
         document.getElementById('modalTitle').textContent = 'Edit Task';
@@ -356,7 +331,6 @@ function editTask(taskId) {
         document.getElementById('taskName').value = task.name;
         document.getElementById('taskCategory').value = task.category;
 
-        // Handle schedule type
         const scheduleType = task.scheduleType || 'fixed';
         document.getElementById('scheduleType').value = scheduleType;
         updateScheduleFields(scheduleType, task.id);
@@ -373,7 +347,15 @@ function editTask(taskId) {
 
         showModal('taskModal');
     }
-}
+};
+
+window.confirmDeleteTask = function(taskId) {
+    pendingDeleteId = taskId;
+    showConfirm('Are you sure you want to delete this task?', async () => {
+        await deleteTask(pendingDeleteId);
+        pendingDeleteId = null;
+    }, 'Delete');
+};
 
 function updateScheduleFields(scheduleType, taskId = null) {
     const fixedFields = document.getElementById('fixedFields');
@@ -390,8 +372,6 @@ function updateScheduleFields(scheduleType, taskId = null) {
         fixedFields.classList.add('hidden');
         predictedFields.classList.remove('hidden');
         scheduleHint.textContent = 'System learns from your usage patterns and predicts when needed.';
-
-        // Show history section only when editing an existing task
         if (taskId) {
             historySection.classList.remove('hidden');
         } else {
@@ -402,66 +382,49 @@ function updateScheduleFields(scheduleType, taskId = null) {
 
 function renderCompletionHistory(history) {
     const historyList = document.getElementById('historyList');
-
     if (!history || history.length === 0) {
         historyList.innerHTML = '<p class="history-empty">No completions recorded yet.</p>';
         return;
     }
-
-    // Sort by date, most recent first
     const sorted = [...history].sort((a, b) => new Date(b) - new Date(a));
-
-    historyList.innerHTML = sorted.map((timestamp, index) => {
+    historyList.innerHTML = sorted.map((timestamp) => {
         const date = new Date(timestamp);
-        const dateStr = date.toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric'
-        });
+        const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
         const timeStr = formatTime(date.getHours(), date.getMinutes());
-
         return `
             <div class="history-item" data-timestamp="${timestamp}">
                 <span class="history-item-date">${dateStr} at ${timeStr}</span>
-                <button type="button" class="history-item-delete" onclick="deleteHistoryEntry('${timestamp}')" title="Delete">&times;</button>
+                <button type="button" class="history-item-delete" onclick="window.deleteHistoryEntry('${timestamp}')" title="Delete">&times;</button>
             </div>
         `;
     }).join('');
 }
 
-function deleteHistoryEntry(timestamp) {
+window.deleteHistoryEntry = async function(timestamp) {
     const taskId = document.getElementById('taskId').value;
     if (!taskId) return;
-
-    const tasks = getTasks();
+    const tasks = await getTasks();
     const task = tasks.find(t => t.id === taskId);
     if (!task || !task.completionHistory) return;
-
-    // Remove the entry
     task.completionHistory = task.completionHistory.filter(t => t !== timestamp);
-
-    // Save and re-render
     const index = tasks.findIndex(t => t.id === taskId);
     tasks[index] = task;
-    saveTasks(tasks);
-
+    await saveTasks(tasks);
     renderCompletionHistory(task.completionHistory);
-    renderTasks();
-}
+    await renderTasks();
+};
 
-function clearCompletionHistory() {
+async function clearCompletionHistory() {
     const taskId = document.getElementById('taskId').value;
     if (!taskId) return;
-
-    showConfirm('Clear all completion history for this task?', () => {
-        const tasks = getTasks();
+    showConfirm('Clear all completion history for this task?', async () => {
+        const tasks = await getTasks();
         const index = tasks.findIndex(t => t.id === taskId);
         if (index !== -1) {
             tasks[index].completionHistory = [];
-            saveTasks(tasks);
+            await saveTasks(tasks);
             renderCompletionHistory([]);
-            renderTasks();
+            await renderTasks();
         }
     }, 'Clear');
 }
@@ -488,24 +451,13 @@ function showConfirm(message, onConfirm, buttonText = 'Confirm') {
     showModal('confirmModal');
 }
 
-function confirmDeleteTask(taskId) {
-    pendingDeleteId = taskId;
-    showConfirm('Are you sure you want to delete this task?', () => {
-        deleteTask(pendingDeleteId);
-        pendingDeleteId = null;
-    }, 'Delete');
-}
-
 function resetForm() {
     document.getElementById('taskForm').reset();
     document.getElementById('taskId').value = '';
     document.getElementById('modalTitle').textContent = 'Add New Task';
-    // Set default date to today
     document.getElementById('lastServiced').value = new Date().toISOString().split('T')[0];
-    // Reset to fixed schedule view
     document.getElementById('scheduleType').value = 'fixed';
     updateScheduleFields('fixed', null);
-    // Clear history display
     document.getElementById('historyList').innerHTML = '<p class="history-empty">No completions recorded yet.</p>';
 }
 
@@ -513,47 +465,32 @@ function resetForm() {
 // Trash Truck Prediction
 // ============================================
 
-function recordTrashArrival() {
+async function recordTrashArrival() {
     const now = new Date();
-    const timeStr = formatTime(now.getHours(), now.getMinutes());
-
-    showConfirm(`Record truck arrival at ${timeStr}?`, () => {
-        const times = getTrashTimes();
-
+    showConfirm(`Record truck arrival at ${formatTime(now.getHours(), now.getMinutes())}?`, async () => {
+        const times = await getTrashTimes();
         times.push({
             date: now.toISOString().split('T')[0],
             time: now.toTimeString().split(' ')[0].substring(0, 5),
             timestamp: now.toISOString()
         });
-
-        // Keep only last 10 recordings
-        if (times.length > 10) {
-            times.shift();
-        }
-
-        saveTrashTimes(times);
-        renderTrashPrediction();
+        if (times.length > 52) times.shift();
+        await saveTrashTimes(times);
+        await renderTrashPrediction();
     }, 'Record');
 }
 
 function calculateAverageTime(times) {
     if (times.length === 0) return null;
-
     let totalMinutes = 0;
     times.forEach(record => {
         const [hours, minutes] = record.time.split(':').map(Number);
         totalMinutes += hours * 60 + minutes;
     });
-
     const avgMinutes = Math.round(totalMinutes / times.length);
     const avgHours = Math.floor(avgMinutes / 60);
     const avgMins = avgMinutes % 60;
-
-    return {
-        hours: avgHours,
-        minutes: avgMins,
-        formatted: formatTime(avgHours, avgMins)
-    };
+    return { hours: avgHours, minutes: avgMins, formatted: formatTime(avgHours, avgMins) };
 }
 
 function formatTime(hours, minutes) {
@@ -565,23 +502,14 @@ function formatTime(hours, minutes) {
 
 function getNextFriday(avgTime) {
     const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 = Sunday, 5 = Friday
+    const dayOfWeek = now.getDay();
     let daysUntilFriday = (5 - dayOfWeek + 7) % 7;
-
-    // If today is Friday, check if we're past the predicted time
     if (daysUntilFriday === 0 && avgTime) {
         const currentMinutes = now.getHours() * 60 + now.getMinutes();
         const predictedMinutes = avgTime.hours * 60 + avgTime.minutes;
-        if (currentMinutes > predictedMinutes) {
-            daysUntilFriday = 7; // Next Friday
-        }
+        if (currentMinutes > predictedMinutes) daysUntilFriday = 7;
     }
-
-    // If it's Saturday or Sunday, also go to next Friday
-    if (daysUntilFriday === 0 && dayOfWeek !== 5) {
-        daysUntilFriday = 7;
-    }
-
+    if (daysUntilFriday === 0 && dayOfWeek !== 5) daysUntilFriday = 7;
     const nextFriday = new Date(now);
     nextFriday.setDate(now.getDate() + daysUntilFriday);
     return nextFriday;
@@ -595,48 +523,27 @@ function formatDate(date) {
 
 function renderTrashGraph(times, avgTime) {
     const graphDiv = document.getElementById('trashGraph');
+    if (!times || times.length < 2) { graphDiv.innerHTML = ''; return; }
 
-    if (!times || times.length < 2) {
-        graphDiv.innerHTML = '';
-        return;
-    }
-
-    // Sort times
     const now = new Date();
     const recentTimes = [...times].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    // Graph dimensions
-    const width = 600;
-    const height = 180;
+    const width = 600, height = 180;
     const padding = { top: 20, right: 20, bottom: 30, left: 50 };
     const graphWidth = width - padding.left - padding.right;
     const graphHeight = height - padding.top - padding.bottom;
-
-    // Use calendar year for x-axis (Jan 1 to Dec 31)
     const year = now.getFullYear();
 
-    // Helper to get day of year (1-365)
     const getDayOfYear = (date) => {
         const start = new Date(date.getFullYear(), 0, 0);
-        const diff = date - start;
-        const oneDay = 1000 * 60 * 60 * 24;
-        return Math.floor(diff / oneDay);
+        return Math.floor((date - start) / (1000 * 60 * 60 * 24));
     };
 
-    // Convert times to minutes for easier calculation
     const dataPoints = recentTimes.map(t => {
         const [hours, minutes] = t.time.split(':').map(Number);
         const date = new Date(t.date);
-        return {
-            date: t.date,
-            dateObj: date,
-            dayOfYear: getDayOfYear(date),
-            minutes: hours * 60 + minutes,
-            label: formatTime(hours, minutes)
-        };
+        return { date: t.date, dateObj: date, dayOfYear: getDayOfYear(date), minutes: hours * 60 + minutes, label: formatTime(hours, minutes) };
     });
 
-    // Calculate min/max for Y axis (time) with 30 min padding
     const allMinutes = dataPoints.map(d => d.minutes);
     const avgMinutes = avgTime.hours * 60 + avgTime.minutes;
     allMinutes.push(avgMinutes);
@@ -644,80 +551,42 @@ function renderTrashGraph(times, avgTime) {
     const maxTime = Math.max(...allMinutes) + 30;
     const timeRange = maxTime - minTime;
 
-    // Scale functions - x based on day of year (1-365), always Jan to Dec
-    const xScale = (dayOfYear) => {
-        return padding.left + ((dayOfYear - 1) / 364) * graphWidth;
-    };
+    const xScale = (dayOfYear) => padding.left + ((dayOfYear - 1) / 364) * graphWidth;
     const yScale = (minutes) => padding.top + graphHeight - ((minutes - minTime) / timeRange) * graphHeight;
 
-    // Build the line path
-    const linePath = dataPoints.map((d, i) => {
-        const x = xScale(d.dayOfYear);
-        const y = yScale(d.minutes);
-        return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
-    }).join(' ');
+    const linePath = dataPoints.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xScale(d.dayOfYear)} ${yScale(d.minutes)}`).join(' ');
 
-    // Y-axis labels (times)
     const yAxisLabels = [];
-    const numYLabels = 4;
-    for (let i = 0; i <= numYLabels; i++) {
-        const minutes = minTime + (timeRange * i / numYLabels);
+    for (let i = 0; i <= 4; i++) {
+        const minutes = minTime + (timeRange * i / 4);
         const hours = Math.floor(minutes / 60);
         const mins = Math.round(minutes % 60);
-        yAxisLabels.push({
-            y: yScale(minutes),
-            label: formatTime(hours, mins)
-        });
+        yAxisLabels.push({ y: yScale(minutes), label: formatTime(hours, mins) });
     }
 
-    // Predicted time line Y position
     const predictedY = yScale(avgMinutes);
 
-    // Build SVG
     const svg = `
         <svg width="100%" viewBox="0 0 ${width} ${height}" class="arrival-graph">
-            <!-- Grid lines -->
-            ${yAxisLabels.map(l => `
-                <line x1="${padding.left}" y1="${l.y}" x2="${width - padding.right}" y2="${l.y}" class="grid-line" />
-            `).join('')}
-
-            <!-- Predicted time dashed line -->
+            ${yAxisLabels.map(l => `<line x1="${padding.left}" y1="${l.y}" x2="${width - padding.right}" y2="${l.y}" class="grid-line" />`).join('')}
             <line x1="${padding.left}" y1="${predictedY}" x2="${width - padding.right}" y2="${predictedY}" class="predicted-line" />
             <text x="${width - padding.right + 5}" y="${predictedY + 4}" class="predicted-label">avg</text>
-
-            <!-- Data line -->
             <path d="${linePath}" class="data-line" />
-
-            <!-- Data points -->
-            ${dataPoints.map((d, i) => `
-                <circle cx="${xScale(d.dayOfYear)}" cy="${yScale(d.minutes)}" r="3" class="data-point">
-                    <title>${d.date}: ${d.label}</title>
-                </circle>
-            `).join('')}
-
-            <!-- Y-axis labels -->
-            ${yAxisLabels.map(l => `
-                <text x="${padding.left - 5}" y="${l.y + 4}" class="y-label">${l.label}</text>
-            `).join('')}
-
-            <!-- X-axis labels - always Jan to Dec, positioned by day of year -->
-            ${(() => {
-                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                return monthNames.map((name, month) => {
-                    const date = new Date(year, month, 1);
-                    const dayOfYear = getDayOfYear(date);
-                    const x = xScale(dayOfYear);
-                    return `<text x="${x}" y="${height - 5}" class="x-label">${name}</text>`;
-                }).join('');
-            })()}
+            ${dataPoints.map(d => `<circle cx="${xScale(d.dayOfYear)}" cy="${yScale(d.minutes)}" r="3" class="data-point"><title>${d.date}: ${d.label}</title></circle>`).join('')}
+            ${yAxisLabels.map(l => `<text x="${padding.left - 5}" y="${l.y + 4}" class="y-label">${l.label}</text>`).join('')}
+            ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((name, month) => {
+                const date = new Date(year, month, 1);
+                const dayOfYear = getDayOfYear(date);
+                return `<text x="${xScale(dayOfYear)}" y="${height - 5}" class="x-label">${name}</text>`;
+            }).join('')}
         </svg>
     `;
 
     graphDiv.innerHTML = svg;
 }
 
-function renderTrashPrediction() {
-    const times = getTrashTimes();
+async function renderTrashPrediction() {
+    const times = await getTrashTimes();
     const predictionDiv = document.getElementById('trashPrediction');
     const historyDiv = document.getElementById('trashHistory');
     const graphDiv = document.getElementById('trashGraph');
@@ -731,30 +600,26 @@ function renderTrashPrediction() {
 
     const avgTime = calculateAverageTime(times);
     const nextFriday = getNextFriday(avgTime);
-    const fridayStr = formatDate(nextFriday);
 
     predictionDiv.innerHTML = `
-        <div class="prediction-time">${fridayStr} ~${avgTime.formatted}</div>
+        <div class="prediction-time">${formatDate(nextFriday)} ~${avgTime.formatted}</div>
         <div class="prediction-note">Based on ${times.length} recorded arrival${times.length !== 1 ? 's' : ''}</div>
     `;
 
-    // Render the arrival time graph
     renderTrashGraph(times, avgTime);
 
-    // Show recent history with edit/delete buttons
     const recentTimes = [...times].reverse().slice(0, 10);
     historyDiv.innerHTML = `
         <h4>Recent Arrivals</h4>
         <div class="trash-history-list">
             ${recentTimes.map((t, i) => {
-                // Find the actual index in the original array
                 const actualIndex = times.length - 1 - i;
                 return `
                     <div class="trash-history-item" data-index="${actualIndex}">
                         <span class="trash-history-date">${t.date}: ${formatTime(...t.time.split(':').map(Number))}</span>
                         <div class="trash-history-actions">
-                            <button class="trash-history-edit" onclick="editTrashEntry(${actualIndex})" title="Edit">&#9998;</button>
-                            <button class="trash-history-delete" onclick="deleteTrashEntry(${actualIndex})" title="Delete">&times;</button>
+                            <button class="trash-history-edit" onclick="window.editTrashEntry(${actualIndex})" title="Edit">&#9998;</button>
+                            <button class="trash-history-delete" onclick="window.deleteTrashEntry(${actualIndex})" title="Delete">&times;</button>
                         </div>
                     </div>
                 `;
@@ -767,137 +632,113 @@ function renderTrashPrediction() {
 // Trash Entry CRUD Operations
 // ============================================
 
-function openAddTrashEntryModal() {
+async function openAddTrashEntryModal() {
     document.getElementById('trashModalTitle').textContent = 'Add Arrival';
     document.getElementById('trashArrivalIndex').value = '';
-    // Default to today's date and current time
     const now = new Date();
     document.getElementById('trashArrivalDate').value = now.toISOString().split('T')[0];
     document.getElementById('trashArrivalTime').value = now.toTimeString().split(' ')[0].substring(0, 5);
     showModal('trashArrivalModal');
 }
 
-function editTrashEntry(index) {
-    const times = getTrashTimes();
+window.editTrashEntry = async function(index) {
+    const times = await getTrashTimes();
     if (index < 0 || index >= times.length) return;
-
     const entry = times[index];
     document.getElementById('trashModalTitle').textContent = 'Edit Arrival';
     document.getElementById('trashArrivalIndex').value = index;
     document.getElementById('trashArrivalDate').value = entry.date;
     document.getElementById('trashArrivalTime').value = entry.time;
     showModal('trashArrivalModal');
-}
+};
 
-function deleteTrashEntry(index) {
-    showConfirm('Delete this arrival record?', () => {
-        const times = getTrashTimes();
+window.deleteTrashEntry = function(index) {
+    showConfirm('Delete this arrival record?', async () => {
+        const times = await getTrashTimes();
         if (index >= 0 && index < times.length) {
             times.splice(index, 1);
-            saveTrashTimes(times);
-            renderTrashPrediction();
+            await saveTrashTimes(times);
+            await renderTrashPrediction();
         }
     }, 'Delete');
-}
+};
 
-function saveTrashEntry() {
+async function saveTrashEntry() {
     const indexStr = document.getElementById('trashArrivalIndex').value;
     const date = document.getElementById('trashArrivalDate').value;
     const time = document.getElementById('trashArrivalTime').value;
-
     if (!date || !time) return;
 
-    const times = getTrashTimes();
-    const entry = {
-        date: date,
-        time: time,
-        timestamp: new Date(`${date}T${time}`).toISOString()
-    };
+    const times = await getTrashTimes();
+    const entry = { date, time, timestamp: new Date(`${date}T${time}`).toISOString() };
 
     if (indexStr !== '') {
-        // Editing existing entry
         const index = parseInt(indexStr);
-        if (index >= 0 && index < times.length) {
-            times[index] = entry;
-        }
+        if (index >= 0 && index < times.length) times[index] = entry;
     } else {
-        // Adding new entry
         times.push(entry);
-        // Sort by date
         times.sort((a, b) => new Date(a.date) - new Date(b.date));
-        // Keep only last 52 recordings
-        while (times.length > 52) {
-            times.shift();
-        }
+        while (times.length > 52) times.shift();
     }
 
-    saveTrashTimes(times);
+    await saveTrashTimes(times);
     hideModal('trashArrivalModal');
-    renderTrashPrediction();
+    await renderTrashPrediction();
 }
 
 // ============================================
 // Event Listeners
 // ============================================
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Load saved preferences
-    const darkModeToggle = document.getElementById('darkModeToggle');
+document.addEventListener('DOMContentLoaded', async function() {
+    const loadingState = document.getElementById('loadingState');
 
+    // Load dark mode preference (still use localStorage for UI prefs)
+    const darkModeToggle = document.getElementById('darkModeToggle');
     if (localStorage.getItem('homeDashboardDarkMode') === 'true') {
         document.body.classList.add('dark-mode');
         darkModeToggle.checked = true;
     }
 
-    // Initial render
-    renderTasks();
-    renderTrashPrediction();
-    checkBackupReminder();
+    // Load data from Firestore
+    try {
+        await renderTasks();
+        await renderTrashPrediction();
+        checkBackupReminder();
+    } finally {
+        loadingState.classList.add('hidden');
+    }
 
     // Auto-refresh every minute
-    setInterval(() => {
-        renderTasks();
-    }, 60000);
+    setInterval(renderTasks, 60000);
 
-    // Dark mode toggle
     darkModeToggle.addEventListener('change', function() {
         document.body.classList.toggle('dark-mode', this.checked);
         localStorage.setItem('homeDashboardDarkMode', this.checked);
     });
 
-    // Schedule type toggle
     document.getElementById('scheduleType').addEventListener('change', function() {
         const taskId = document.getElementById('taskId').value;
         updateScheduleFields(this.value, taskId || null);
     });
 
-    // Add Task button
     document.getElementById('addTaskBtn').addEventListener('click', function() {
         resetForm();
         showModal('taskModal');
     });
 
-    // Close modal buttons
-    document.getElementById('closeModal').addEventListener('click', function() {
-        hideModal('taskModal');
-    });
-
-    document.getElementById('cancelBtn').addEventListener('click', function() {
-        hideModal('taskModal');
-    });
-
-    // Clear history button
+    document.getElementById('closeModal').addEventListener('click', () => hideModal('taskModal'));
+    document.getElementById('cancelBtn').addEventListener('click', () => hideModal('taskModal'));
     document.getElementById('clearHistoryBtn').addEventListener('click', clearCompletionHistory);
 
-    // Task form submission
-    document.getElementById('taskForm').addEventListener('submit', function(e) {
+    document.getElementById('taskForm').addEventListener('submit', async function(e) {
         e.preventDefault();
 
         const scheduleType = document.getElementById('scheduleType').value;
         const taskData = {
             name: document.getElementById('taskName').value.trim(),
             category: document.getElementById('taskCategory').value,
-            scheduleType: scheduleType
+            scheduleType
         };
 
         if (scheduleType === 'fixed') {
@@ -907,65 +748,48 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             taskData.expectedInterval = parseInt(document.getElementById('expectedInterval').value);
             taskData.expectedIntervalUnit = document.getElementById('expectedIntervalUnit').value;
-            // Initialize with current time as first completion if new task
             const taskId = document.getElementById('taskId').value;
-            if (!taskId) {
-                taskData.completionHistory = [new Date().toISOString()];
-            }
+            if (!taskId) taskData.completionHistory = [new Date().toISOString()];
         }
 
         const taskId = document.getElementById('taskId').value;
-
         if (taskId) {
-            updateTask(taskId, taskData);
+            await updateTask(taskId, taskData);
         } else {
-            addTask(taskData);
+            await addTask(taskData);
         }
 
         hideModal('taskModal');
     });
 
-    // Confirmation modal
     document.getElementById('confirmNo').addEventListener('click', function() {
         pendingConfirmAction = null;
         hideModal('confirmModal');
     });
 
-    document.getElementById('confirmYes').addEventListener('click', function() {
+    document.getElementById('confirmYes').addEventListener('click', async function() {
         if (pendingConfirmAction) {
-            pendingConfirmAction();
+            await pendingConfirmAction();
             pendingConfirmAction = null;
         }
         hideModal('confirmModal');
     });
 
-    // Record trash arrival
     document.getElementById('recordTrashBtn').addEventListener('click', recordTrashArrival);
-
-    // Add trash entry manually
     document.getElementById('addTrashEntryBtn').addEventListener('click', openAddTrashEntryModal);
-
-    // Trash arrival modal
-    document.getElementById('closeTrashModal').addEventListener('click', function() {
-        hideModal('trashArrivalModal');
-    });
-
-    document.getElementById('cancelTrashArrival').addEventListener('click', function() {
-        hideModal('trashArrivalModal');
-    });
+    document.getElementById('closeTrashModal').addEventListener('click', () => hideModal('trashArrivalModal'));
+    document.getElementById('cancelTrashArrival').addEventListener('click', () => hideModal('trashArrivalModal'));
 
     document.getElementById('trashArrivalForm').addEventListener('submit', function(e) {
         e.preventDefault();
         saveTrashEntry();
     });
 
-    // Export data
     document.getElementById('exportDataBtn').addEventListener('click', function(e) {
         e.preventDefault();
         exportData();
     });
 
-    // Import data
     document.getElementById('importDataBtn').addEventListener('click', function(e) {
         e.preventDefault();
         document.getElementById('importFileInput').click();
@@ -974,21 +798,17 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('importFileInput').addEventListener('change', function(e) {
         if (e.target.files.length > 0) {
             importData(e.target.files[0]);
-            e.target.value = ''; // Reset so same file can be selected again
+            e.target.value = '';
         }
     });
 
-    // Backup reminder buttons
     document.getElementById('backupNowBtn').addEventListener('click', function(e) {
         e.preventDefault();
         exportData();
     });
 
-    document.getElementById('dismissReminder').addEventListener('click', function() {
-        hideBackupReminder();
-    });
+    document.getElementById('dismissReminder').addEventListener('click', hideBackupReminder);
 
-    // Close modals on outside click
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', function(e) {
             if (e.target === this) {
@@ -998,13 +818,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Close modals on Escape key
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             pendingConfirmAction = null;
-            document.querySelectorAll('.modal').forEach(modal => {
-                modal.classList.add('hidden');
-            });
+            document.querySelectorAll('.modal').forEach(modal => modal.classList.add('hidden'));
         }
     });
 });
