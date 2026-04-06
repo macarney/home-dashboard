@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Maintenance Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Home Maintenance Dashboard</h1>
+            <div class="header-actions">
+                <div class="toggles">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="darkModeToggle">
+                        <span>Dark Mode</span>
+                    </label>
+                </div>
+                <button id="addTaskBtn" class="btn btn-primary">+ Add Task</button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Backup Reminder -->
+            <div id="backupReminder" class="backup-reminder hidden">
+                <span>It's been a while since your last backup.</span>
+                <a href="#" id="backupNowBtn">Backup Now</a>
+                <button class="reminder-dismiss" id="dismissReminder">&times;</button>
+            </div>
+
+            <!-- Task List -->
+            <section id="taskList" class="task-list">
+                <!-- Tasks will be rendered here by JavaScript -->
+            </section>
+
+            <!-- Trash Truck Prediction Section -->
+            <section id="trashSection" class="trash-section">
+                <h2>Trash Truck Tracker</h2>
+                <div id="trashPrediction" class="trash-prediction">
+                    <p>No arrival times recorded yet. Record when the truck arrives to get predictions!</p>
+                </div>
+                <div id="trashGraph" class="trash-graph"></div>
+                <div class="trash-buttons">
+                    <button id="recordTrashBtn" class="btn btn-secondary">Record Truck Arrival</button>
+                    <button id="addTrashEntryBtn" class="btn btn-cancel btn-small">Add Entry</button>
+                </div>
+                <div id="trashHistory" class="trash-history"></div>
+            </section>
+        </main>
+
+        <footer class="dashboard-footer">
+            <a href="file:///Users/michael/home-dashboard/">Open Project Folder</a>
+            <span class="footer-divider">|</span>
+            <a href="file:///Users/michael/home-dashboard/README.md">View README</a>
+            <span class="footer-divider">|</span>
+            <a href="#" id="exportDataBtn">Export Data</a>
+            <span class="footer-divider">|</span>
+            <a href="#" id="importDataBtn">Import Data</a>
+            <input type="file" id="importFileInput" accept=".json" style="display: none;">
+        </footer>
+
+        <!-- Add/Edit Task Modal -->
+        <div id="taskModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalTitle">Add New Task</h2>
+                    <button class="close-btn" id="closeModal">&times;</button>
+                </div>
+                <form id="taskForm">
+                    <input type="hidden" id="taskId">
+
+                    <div class="form-group">
+                        <label for="taskName">Task Name</label>
+                        <input type="text" id="taskName" required placeholder="e.g., HVAC Air Filter">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="taskCategory">Category</label>
+                        <select id="taskCategory" required>
+                            <option value="">Select a category</option>
+                            <option value="Maintenance">Maintenance</option>
+                            <option value="Pet Care">Pet Care</option>
+                            <option value="Household">Household</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="scheduleType">Schedule Type</label>
+                        <select id="scheduleType" required>
+                            <option value="fixed">Fixed Schedule (set lifespan)</option>
+                            <option value="predicted">Predicted (learn from usage)</option>
+                        </select>
+                        <p class="form-hint" id="scheduleHint">Task will be due after a set number of days.</p>
+                    </div>
+
+                    <div id="fixedFields">
+                        <div class="form-group">
+                            <label for="lifespanValue">Lifespan</label>
+                            <div class="lifespan-input">
+                                <input type="number" id="lifespanValue" min="1" placeholder="e.g., 30">
+                                <select id="lifespanUnit">
+                                    <option value="days">Days</option>
+                                    <option value="weeks">Weeks</option>
+                                    <option value="months">Months</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="lastServiced">Last Serviced</label>
+                            <input type="date" id="lastServiced">
+                        </div>
+                    </div>
+
+                    <div id="predictedFields" class="hidden">
+                        <div class="form-group">
+                            <label for="expectedInterval">Expected Interval (approximate)</label>
+                            <div class="lifespan-input">
+                                <input type="number" id="expectedInterval" min="1" placeholder="e.g., 7">
+                                <select id="expectedIntervalUnit">
+                                    <option value="days">Days</option>
+                                    <option value="weeks">Weeks</option>
+                                    <option value="months">Months</option>
+                                </select>
+                            </div>
+                            <p class="form-hint">Starting estimate until you record enough data.</p>
+                        </div>
+                    </div>
+
+                    <div id="historySection" class="hidden">
+                        <div class="form-group">
+                            <div class="history-header">
+                                <label>Completion History</label>
+                                <button type="button" class="btn btn-cancel btn-small" id="clearHistoryBtn">Clear All</button>
+                            </div>
+                            <div id="historyList" class="history-list">
+                                <p class="history-empty">No completions recorded yet.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" id="cancelBtn">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Task</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Confirmation Modal -->
+        <div id="confirmModal" class="modal hidden">
+            <div class="modal-content modal-small">
+                <h3 id="confirmMessage">Are you sure?</h3>
+                <div class="form-actions">
+                    <button class="btn btn-cancel" id="confirmNo">Cancel</button>
+                    <button class="btn btn-primary" id="confirmYes">Confirm</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trash Arrival Edit Modal -->
+        <div id="trashArrivalModal" class="modal hidden">
+            <div class="modal-content modal-small">
+                <div class="modal-header">
+                    <h2 id="trashModalTitle">Add Arrival</h2>
+                    <button class="close-btn" id="closeTrashModal">&times;</button>
+                </div>
+                <form id="trashArrivalForm">
+                    <input type="hidden" id="trashArrivalIndex" value="">
+                    <div class="form-group">
+                        <label for="trashArrivalDate">Date</label>
+                        <input type="date" id="trashArrivalDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="trashArrivalTime">Time</label>
+                        <input type="time" id="trashArrivalTime" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" id="cancelTrashArrival">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
