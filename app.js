@@ -102,21 +102,25 @@ async function importData(file) {
     reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
+            console.log('Parsed data:', data);
             if (data.tasks) {
-                // Normalize old tasks that may be missing scheduleType
-                const normalized = data.tasks.map(task => ({
-                    scheduleType: 'fixed',
-                    ...task
-                }));
+                const normalized = data.tasks.map(task => ({ scheduleType: 'fixed', ...task }));
+                console.log('Normalized tasks:', normalized);
                 _tasks = normalized;
                 await saveTasks(normalized);
+                console.log('Tasks saved');
             }
-            if (data.trashTimes) { _trashTimes = data.trashTimes; await saveTrashTimes(data.trashTimes); }
-            await renderTasks(); await renderTrashPrediction();
+            if (data.trashTimes) {
+                _trashTimes = data.trashTimes;
+                await saveTrashTimes(data.trashTimes);
+                console.log('Trash times saved');
+            }
+            await renderTasks();
+            await renderTrashPrediction();
             alert('Data imported successfully!');
         } catch (err) {
-            console.error('Import error:', err);
-            alert('Error importing data. Please check the file format.');
+            console.error('Import error full details:', err);
+            alert('Error: ' + err.message);
         }
     };
     reader.readAsText(file);
