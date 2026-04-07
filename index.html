@@ -7,7 +7,26 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-card">
+            <h1>Home Dashboard</h1>
+            <p class="login-subtitle">Sign in to access your dashboard</p>
+            <button id="signInBtn" class="btn btn-google">
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
+                    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+                    <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+                    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                </svg>
+                Sign in with Google
+            </button>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="container hidden">
         <header>
             <h1>Home Maintenance Dashboard</h1>
             <div class="header-actions">
@@ -17,28 +36,23 @@
                         <span>Dark Mode</span>
                     </label>
                 </div>
+                <div class="user-info">
+                    <span id="userDisplayName" class="user-name"></span>
+                    <button id="signOutBtn" class="btn btn-signout btn-small">Sign Out</button>
+                </div>
                 <button id="addTaskBtn" class="btn btn-primary">+ Add Task</button>
             </div>
         </header>
 
         <main>
-            <!-- Loading State -->
-            <div id="loadingState" class="loading-state">
-                <p>Loading your data...</p>
-            </div>
-
-            <!-- Backup Reminder -->
             <div id="backupReminder" class="backup-reminder hidden">
                 <span>It's been a while since your last backup.</span>
                 <a href="#" id="backupNowBtn">Backup Now</a>
                 <button class="reminder-dismiss" id="dismissReminder">&times;</button>
             </div>
 
-            <!-- Task List -->
-            <section id="taskList" class="task-list">
-            </section>
+            <section id="taskList" class="task-list"></section>
 
-            <!-- Trash Truck Prediction Section -->
             <section id="trashSection" class="trash-section">
                 <h2>Trash Truck Tracker</h2>
                 <div id="trashPrediction" class="trash-prediction">
@@ -69,12 +83,10 @@
                 </div>
                 <form id="taskForm">
                     <input type="hidden" id="taskId">
-
                     <div class="form-group">
                         <label for="taskName">Task Name</label>
                         <input type="text" id="taskName" required placeholder="e.g., HVAC Air Filter">
                     </div>
-
                     <div class="form-group">
                         <label for="taskCategory">Category</label>
                         <select id="taskCategory" required>
@@ -84,7 +96,6 @@
                             <option value="Household">Household</option>
                         </select>
                     </div>
-
                     <div class="form-group">
                         <label for="scheduleType">Schedule Type</label>
                         <select id="scheduleType" required>
@@ -93,7 +104,6 @@
                         </select>
                         <p class="form-hint" id="scheduleHint">Task will be due after a set number of days.</p>
                     </div>
-
                     <div id="fixedFields">
                         <div class="form-group">
                             <label for="lifespanValue">Lifespan</label>
@@ -106,13 +116,11 @@
                                 </select>
                             </div>
                         </div>
-
                         <div class="form-group">
                             <label for="lastServiced">Last Serviced</label>
                             <input type="date" id="lastServiced">
                         </div>
                     </div>
-
                     <div id="predictedFields" class="hidden">
                         <div class="form-group">
                             <label for="expectedInterval">Expected Interval (approximate)</label>
@@ -127,7 +135,6 @@
                             <p class="form-hint">Starting estimate until you record enough data.</p>
                         </div>
                     </div>
-
                     <div id="historySection" class="hidden">
                         <div class="form-group">
                             <div class="history-header">
@@ -139,7 +146,6 @@
                             </div>
                         </div>
                     </div>
-
                     <div class="form-actions">
                         <button type="button" class="btn btn-cancel" id="cancelBtn">Cancel</button>
                         <button type="submit" class="btn btn-primary">Save Task</button>
@@ -159,7 +165,7 @@
             </div>
         </div>
 
-        <!-- Trash Arrival Edit Modal -->
+        <!-- Trash Arrival Modal -->
         <div id="trashArrivalModal" class="modal hidden">
             <div class="modal-content modal-small">
                 <div class="modal-header">
@@ -185,7 +191,6 @@
         </div>
     </div>
 
-    <!-- Firebase SDK -->
     <script type="module" src="app.js"></script>
 </body>
 </html>

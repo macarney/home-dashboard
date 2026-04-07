@@ -469,3 +469,110 @@ body.dark-mode .dashboard-footer { border-top-color: #3a3a5a; }
 body.dark-mode .dashboard-footer a { color: #888; }
 body.dark-mode .dashboard-footer a:hover { color: #3498db; }
 body.dark-mode .footer-divider { color: #555; }
+
+/* Login Screen */
+.login-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f5f5f5;
+}
+
+.login-card {
+    background: white;
+    padding: 50px 40px;
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    text-align: center;
+    max-width: 380px;
+    width: 90%;
+}
+
+.login-card h1 {
+    font-size: 2rem;
+    color: #2c3e50;
+    margin-bottom: 10px;
+}
+
+.login-subtitle {
+    color: #7f8c8d;
+    margin-bottom: 30px;
+    font-size: 0.95rem;
+}
+
+.btn-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: white;
+    color: #333;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.btn-google:hover {
+    background-color: #f8f8f8;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    transform: none;
+}
+
+/* User info in header */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-name {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+}
+
+.btn-signout {
+    background-color: #e0e0e0;
+    color: #555;
+}
+
+.btn-signout:hover {
+    background-color: #bdbdbd;
+}
+
+/* Dark mode login */
+body.dark-mode .login-screen {
+    background-color: #1a1a2e;
+}
+
+body.dark-mode .login-card {
+    background: #252540;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+}
+
+body.dark-mode .login-card h1 {
+    color: #eee;
+}
+
+body.dark-mode .login-subtitle {
+    color: #999;
+}
+
+body.dark-mode .btn-google {
+    background: #1a1a2e;
+    border-color: #3a3a5a;
+    color: #eee;
+}
+
+body.dark-mode .btn-google:hover {
+    background-color: #2a2a4a;
+}
+
+body.dark-mode .user-name {
+    color: #aaa;
+}
